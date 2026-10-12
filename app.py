@@ -3,9 +3,60 @@ from flask import Flask, request, jsonify
 import joblib
 import pandas as pd
 from pathlib import Path
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///amanzi_impilo.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db = SQLAlchemy(app)
+
+# Create database tables
+
+class SensorReading(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(50), nullable=False)
+    flow_litres = db.Column(db.Float)
+    water_level_cm = db.Column(db.Float)
+    ph = db.Column(db.Float)
+    turbidity_ntu = db.Column(db.Float)
+    tds_ppm = db.Column(db.Float)
+    temperature_c = db.Column(db.Float)
+    recorded_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class WaterPrediction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    target = db.Column(db.String(100), nullable=False)
+    predicted_litres_per_day = db.Column(
+        db.Float,
+        nullable=False
+    )
+    model_name = db.Column(
+        db.String(100),
+        nullable=False,
+        default="water_savings_model"
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+# Create the database and tables
+if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
+
+    app.run(debug=True, port=5000)
+
+    
 MODEL_PATH = Path("models/water_savings_model.joblib")
 FEATURES_PATH = Path("models/water_savings_features.joblib")
 
@@ -85,6 +136,7 @@ def predict():
             return jsonify({
                 "error": "Input features cannot contain missing values."
             }), 400
+        
 
         prediction = float(model.predict(row)[0])
 
